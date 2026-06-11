@@ -1,0 +1,74 @@
+#!/bin/bash
+# sim-qa front door — self-contained (no package.json changes needed).
+# Usage: scripts/sim-qa/qa <command> [args]
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cmd="${1:-help}"
+if [ "$#" -gt 0 ]; then shift; fi
+
+case "$cmd" in
+  serve|recover|reload|health|doctor|status|stop)
+    exec python3 "$DIR/core/devserver.py" "$cmd" "$@" ;;
+  logs)
+    exec python3 "$DIR/core/devserver.py" metrolog "${1:-40}" ;;
+  crashes)
+    exec python3 "$DIR/core/devserver.py" crashes "${1:-20}" ;;
+  init|shot|tree|tap|type|scroll|note|act)
+    exec python3 "$DIR/core/qa.py" "$cmd" "$@" ;;
+  publish)
+    exec python3 "$DIR/core/publish.py" "$@" ;;
+  check|snapshot|diff)
+    exec python3 "$DIR/lisk/qa_api.py" "$cmd" "$@" ;;
+  find)
+    exec python3 "$DIR/core/idb_ui.py" find "$@" ;;
+  companion)
+    exec python3 "$DIR/core/idb_ui.py" companion "$@" ;;
+  target)
+    exec python3 "$DIR/target.py" "$@" ;;
+  help|--help|-h)
+    cat <<'EOF'
+sim-qa — AI eyes & hands on the lisk iOS simulator (pinned sim/port: target.py)
+
+Metro / app lifecycle:
+  qa doctor             first-time machine check — every FAIL prints its fix
+  qa serve              take over Metro on the tester port (owned + logged)
+  qa health             metro up? backend up? app vs launcher? idb companion?
+  qa status             what holds the port, tester pid, log sizes
+  qa recover            reconnect app; restart Metro if down; respawn idb companion
+  qa reload             cold-restart the app (LAST-resort recovery)
+  qa logs [N]           last N lines of owned Metro log (default 40)
+  qa crashes [N]        crash-pattern hits from the OS log stream (default 20)
+  qa stop               kill tester Metro + crash stream (this port only)
+
+Run bookkeeping + eyes & hands:
+  qa init --scope S [--driver wake|goal] [--label L]   start a run (journal/findings)
+  qa shot <label>       screenshot into the current run
+  qa tree               dump labelled a11y elements (what's tappable)
+  qa tap --label "AX" [--role Button] [--force] | --tab home|notifications | --frac fx,fy
+                        (--role disambiguates label collisions; refuses off-viewport / tab-bar targets)
+  qa type <text> [--label L] [--role R] [--clear] [--enter]   type into a (focused) field
+  qa scroll [down|up] [--amount 0.35]   scroll native lists (NOT RNGH gestures)
+  qa note <text>        append a finding to the current run
+  qa act <text>         append a line to actions.log
+  qa find <label>       locate an element without tapping
+  qa companion [ensure] idb companion check / respawn
+  qa target [--udid|--port|--bundle|--mode|--window]   print pinned config values
+
+PR evidence (hosts images OFF the PR branch — see RUNBOOK "PR evidence"):
+  qa publish <img> --feature S [--name F] [--caption C] [--width N]
+                        host a QA image on the qa-assets orphan branch; print the PR <img> tag
+
+API invariants (local BE on :8080 — registry: lisk/INVARIANTS.md):
+  qa check              assert INV-1..7 against BE ground truth (exit 1 on fail)
+  qa snapshot --out f   snapshot transaction states before an action
+  qa diff f [--expect-new N]   delta probes D-1..D-3 vs a snapshot
+
+Modes (target.py): LISK_QA_MODE=mock (default; local BE on :8080 required)
+                   LISK_QA_MODE=staging (structured; see RUNBOOK.md)
+EOF
+    ;;
+  *)
+    echo "qa: unknown command '$cmd' — run 'scripts/sim-qa/qa help'" >&2
+    exit 1 ;;
+esac

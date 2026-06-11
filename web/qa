@@ -1,0 +1,62 @@
+#!/bin/bash
+# web-qa front door — self-contained (no package.json changes needed).
+# Usage: scripts/qa/qa <command> [args]
+set -euo pipefail
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cmd="${1:-help}"
+if [ "$#" -gt 0 ]; then shift; fi
+
+case "$cmd" in
+  serve|health|status|stop)
+    exec python3 "$DIR/core/devserver.py" "$cmd" "$@" ;;
+  logs)
+    exec python3 "$DIR/core/devserver.py" logs "${1:-40}" ;;
+  init|shot|note|act)
+    exec python3 "$DIR/core/qa.py" "$cmd" "$@" ;;
+  publish)
+    exec python3 "$DIR/core/publish.py" "$@" ;;
+  check|snapshot|diff)
+    exec python3 "$DIR/lisk/qa_api.py" "$cmd" "$@" ;;
+  target)
+    exec python3 "$DIR/target.py" "$@" ;;
+  help|--help|-h)
+    cat <<'EOF'
+web-qa — agent-driven QA for lisk-web (pinned tester server: target.py)
+
+The agent's EYES AND HANDS are the Playwright MCP (browser_navigate /
+browser_click / browser_snapshot / browser_console_messages / ...) — see
+README.md for the one-time MCP setup. These commands cover the rest:
+
+Tester server (pinned to :3002 — your dev :3000 is never touched):
+  qa serve              start the tester's Next dev server in the active mode
+                        (LISK_QA_MODE=local|msw|staging; default local)
+  qa health             server up? backend up (local mode)? exit 1 if not
+  qa status             pid, port holders, log size
+  qa logs [N]           last N lines of the tester server log
+  qa stop               kill the tester's server (this port only)
+
+Run bookkeeping + archival evidence:
+  qa init --scope S [--driver wake|goal] [--label L]   start a run
+  qa shot <label> [path]   full-page screenshot of APP_URL+path into the run
+                           (fresh context — works in local/msw; staging needs
+                           the MCP's in-session screenshot)
+  qa note <text>        append a finding
+  qa act <text>         append to the audit log
+
+PR evidence (hosts images OFF the PR branch — see RUNBOOK "PR evidence"):
+  qa publish <img> --feature S [--name F] [--caption C] [--width N]
+                        host a QA image on the qa-assets orphan branch; print the PR <img> tag
+
+Backend invariants (local mode only — registry: lisk/INVARIANTS.md):
+  qa check              assert INV-1..7 against backend ground truth
+  qa snapshot --out f   snapshot transaction states before an action
+  qa diff f [--expect-new N]   delta probes D-1..D-3
+
+  qa target [--url|--port|--mode]   print pinned config values
+EOF
+    ;;
+  *)
+    echo "qa: unknown command '$cmd' — run 'scripts/qa/qa help'" >&2
+    exit 1 ;;
+esac
