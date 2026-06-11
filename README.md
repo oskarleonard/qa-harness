@@ -62,9 +62,11 @@ If you cloned elsewhere: `echo /path/to/qa-harness > ~/.qa-harness`.
 ## Onboard a project (minutes)
 
 1. Copy the shim: `templates/shim-mobile` → `<project>/scripts/sim-qa/qa`
-   (or `templates/shim-web` → `<project>/scripts/qa/qa`), `chmod +x`.
+   (or `templates/shim-web` → `<project>/scripts/qa/qa`), `chmod +x`; copy
+   `templates/_harness.py` next to it.
 2. Copy `mobile/target.example.py` (or `web/`) next to it as `target.py` and
-   adapt the values — see PORTING.md "Per-app values".
+   edit its CONFIG section — values only; the machinery (sim auto-resolve,
+   the `--field` CLI) comes from `common/targetkit.py` via `_harness.py`.
 3. Gitignore `runs/`, `target.local`, `__pycache__/` in that dir.
 4. Optional: add `product/` (start from `templates/product-README.md`) and
    `ext/`.

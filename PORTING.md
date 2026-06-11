@@ -10,8 +10,8 @@ per-app values, and the empirical platform gotchas.
 | Piece | Action |
 |---|---|
 | Engine (`mobile/core` or `web/core` + dispatcher) | **Free.** Lives in this repo; never copy it into a project. |
-| `scripts/.../qa` shim | Copy from `templates/` (~20 lines, never changes). |
-| `target.py` | **Write per project** from `target.example.py` (keep the structure, incl. the auto-resolve + `target.local` pin on mobile). See "Per-app values". |
+| `scripts/.../qa` shim + `_harness.py` | Copy both from `templates/` (never edited). |
+| `target.py` | **Write per project** from `target.example.py` — the CONFIG section only; the machinery (UDID auto-resolve + `target.local` pin, `--field` CLI) comes from `common/targetkit.py`. See "Per-app values". |
 | `product/` (qa_api.py + INVARIANTS.md + FIGMA_MAP.md + RUNBOOK addendum) | **Re-derive per product** — this asserts THIS app's ground truth and rails. Port the *pattern* (see "Ground-truth layer"), never the rules. |
 | `ext/` | Only if the project needs extra mechanics (e.g. an autoplay layer for timed gameplay — sub-3s response windows an LLM can't keep up with live). |
 | `.claude/commands/qa-tester*.md` | Thin per-project pointers: "follow the engine RUNBOOK + product/RUNBOOK.md". The Rails sections are the per-app customization point. |

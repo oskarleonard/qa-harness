@@ -1,134 +1,41 @@
-# target.example.py — copy into YOUR project as scripts/sim-qa/target.py and
-# adapt. This is a real working pin (lisk-mobile's), kept as the living example.
-# Per-app values to derive (see PORTING.md): DEVICE_NAME (a sim model no other
-# project's tester uses), PORT (distinct from dev Metro + every other tester),
-# BUNDLE + SCHEME (app.config.ts), MODE/METRO_ENV (your mock-auth flag),
-# TAB_ORDER (read `qa tree`, don't guess), LAUNCHER_LABELS, LOG_PROCESS_HINT,
-# and /tmp artifact paths (namespace per project!).
-# Optional ground truth: BACKEND_URL (health/doctor ping it; omit or None when
-# the project has no backend) and BACKEND_HINT (the fix command printed when
-# it's DOWN, e.g. "cd ../my-backend && make run").
-"""Target config for the auto-QA tester — lisk-app-mobile's pin.
+"""Target config for the auto-QA tester (MOBILE) — the project's pin.
 
-The tester is PINNED to exactly one simulator + Metro port, so any other
-project's tester on this machine (a different sim / port) can run at the same
-time without collision. It never kills Metro on a different port or drives a
-different sim.
-
-The UDID is per-machine, so it is NOT hardcoded here. Resolution order:
-  1. LISK_QA_UDID env var (explicit override)
-  2. scripts/sim-qa/target.local — the per-machine pin (gitignored, one line)
-  3. auto-discover a simulator named DEVICE_NAME (prefer booted, then newest
-     iOS runtime) and WRITE the pin, so the choice sticks forever after.
-The persisted pin is what keeps this as stable as a hardcoded UDID — discovery
-runs at most once per machine. `qa doctor` shows what resolved and why.
+Copy into YOUR project as scripts/sim-qa/target.py (with templates/_harness.py
+next to it) and edit the CONFIG section — every line in it is a knob; the
+machinery (per-machine sim resolution, the --field CLI) comes from the
+harness. This is a real working pin (lisk-mobile's), kept as the living
+example; PORTING.md "Per-app values" explains how to derive each value.
 """
-
-import json
 import os
-import re
-import subprocess
-import sys
 
-DEVICE_NAME = "iPhone 17 Pro"  # a distinct sim so any other tester here coexists
-PORT = 8092  # lisk dev Metro = 8081; a distinct port so any other tester on this machine can coexist
-BUNDLE = "com.lisk.app.development"  # ENVIRONMENT=development build
-SCHEME = "liskmobile"  # app.config.ts `scheme` — used for dev-client deep links
-WINDOW = f'window "{DEVICE_NAME}"'  # legacy osascript reference only (unused)
+from _harness import targetkit
 
-_LOCAL_PIN = os.path.join(os.path.dirname(os.path.abspath(__file__)), "target.local")
+# ───────────── CONFIG — everything in this section is yours to edit ─────────────
 
+DEVICE_NAME = "iPhone 17 Pro"  # a sim model NO other project's tester uses on this machine
+PORT = 8092  # tester Metro port — distinct from dev Metro (8081) + every other tester
+BUNDLE = "com.lisk.app.development"  # dev-flavor bundle id (app.config.ts)
+SCHEME = "liskmobile"  # app.config.ts `scheme` — dev-client deep links
+UDID_ENV = "LISK_QA_UDID"  # env override for the per-machine sim pin (target.local)
 
-def _runtime_version(runtime_key):
-    m = re.search(r"iOS-(\d+)-(\d+)", runtime_key)
-    return (int(m.group(1)), int(m.group(2))) if m else (0, 0)
-
-
-def _discover_udid():
-    """Best available sim named DEVICE_NAME: booted first, then newest iOS."""
-    try:
-        out = subprocess.run(
-            ["xcrun", "simctl", "list", "-j", "devices", "available"],
-            capture_output=True, text=True, timeout=15,
-        )
-        runtimes = json.loads(out.stdout)["devices"]
-    except Exception:
-        return None
-    candidates = [
-        (d.get("state") == "Booted", _runtime_version(runtime), d["udid"])
-        for runtime, devices in runtimes.items()
-        for d in devices
-        if d.get("name") == DEVICE_NAME
-    ]
-    if not candidates:
-        return None
-    candidates.sort(reverse=True)
-    return candidates[0][2]
-
-
-def _resolve_udid():
-    env = os.environ.get("LISK_QA_UDID")
-    if env:
-        return env
-    try:
-        pin = open(_LOCAL_PIN).read().strip()
-        if pin:
-            return pin
-    except OSError:
-        pass
-    udid = _discover_udid()
-    if not udid:
-        sys.exit(
-            f"sim-qa: no simulator named {DEVICE_NAME!r} found.\n"
-            f"Create one (Xcode > Devices & Simulators), or pin one explicitly:\n"
-            f"  echo <UDID> > {_LOCAL_PIN}   (or export LISK_QA_UDID=<UDID>)\n"
-            f"Run `scripts/sim-qa/qa doctor` to check the full setup."
-        )
-    try:
-        open(_LOCAL_PIN, "w").write(udid + "\n")
-    except OSError:
-        pass  # read-only checkout — resolution still works, just re-runs next time
-    return udid
-
-
-UDID = _resolve_udid()
-
-# Tester mode — 'mock' (V1 default) or 'staging' (structured, not yet operational):
-#   mock:    Metro is spawned with EXPO_PUBLIC_MOCK_AUTH=true -> Clerk/Privy are
-#            aliased to stubs (metro.config.js), the biometric gate is skipped,
-#            and the axios client targets http://localhost:8080. The local
-#            lisk-backend MUST be running: `cd ../lisk-backend && make run`.
-#   staging: no env override -> the app talks to api-staging with REAL Clerk
-#            auth. Requires a human to have logged in once on this sim (the
-#            session persists via expo-secure-store); rails become read-mostly.
-#            See RUNBOOK.md "Tester modes".
-MODE = os.environ.get("LISK_QA_MODE", "mock")
-if MODE not in ("mock", "staging"):
-    # A typo must not silently select non-mock behavior against the wrong backend.
-    sys.exit(f"sim-qa: invalid LISK_QA_MODE={MODE!r} — expected 'mock' or 'staging'")
-# EXPO_PUBLIC_AI_TESTER marks the bundle as tester-driven in BOTH modes — it
-# gates tester-only affordances in app code (the BottomSheet escape hatch) so
-# regular dev / Detox / EAS bundles are unaffected.
+# Tester mode + the env vars the tester's Metro bundles with (your app's mock flags).
+MODE = targetkit.mode_from_env("LISK_QA_MODE", default="mock", allowed=("mock", "staging"))
 METRO_ENV = {
     "EXPO_PUBLIC_AI_TESTER": "true",
     **({"EXPO_PUBLIC_MOCK_AUTH": "true"} if MODE == "mock" else {}),
 }
 
-# idb — accessibility-tree element finding/tapping (preferred over pixel taps).
-# One-time machine setup: `brew install idb-companion` +
-# `python3 -m venv ~/.idb-venv && ~/.idb-venv/bin/pip install fb-idb`.
+# Ground truth (omit or None = no backend; health/doctor skip the ping).
+BACKEND_URL = "http://localhost:8080"
+BACKEND_HINT = "cd ../lisk-backend && make run  (Docker deps up first)"
+
+# idb CLI location (machine setup: see the engine README).
 IDB = os.path.expanduser("~/.idb-venv/bin/idb")
 
-# Bottom-tab order (left->right). iOS 26 NativeTabs collapse their items into a
-# single 'Tab Bar' a11y group, so idb_ui taps the n-th segment by this index.
-# (A 'cards' tab exists behind TODO(cards) — add it here when unhidden.)
+# Bottom-tab order (left->right) — read the live a11y tree (`qa tree`), don't guess.
 TAB_ORDER = ["home", "notifications"]
 
-# app_state() detection (core/devserver.py): lisk is light-themed, so the
-# dark-pixel heuristic from an earlier version of this tester can't tell the app
-# from the Expo dev-launcher. We grep the a11y tree for launcher-distinctive labels.
-# The last two match the dev-client ERROR screen (e.g. after it tried a dead
-# Metro URL) — also a "needs deep link" state.
+# app_state() launcher detection — generic Expo dev-client labels usually suffice.
 LAUNCHER_LABELS = [
     "development servers",
     "enter url manually",
@@ -136,30 +43,20 @@ LAUNCHER_LABELS = [
     "failed to load app",
 ]
 
-# OS crash-log stream predicate hint (core/crashlog.py): matches the app's
-# process image path case-insensitively.
+# OS crash-log stream predicate (substring of the app's process image path).
 LOG_PROCESS_HINT = "lisk"
 
-# Process-hygiene artifacts (so nothing lingers unnoticed):
-METRO_LOG = "/tmp/lisk-tester-metro.log"  # owned-Metro stdout/stderr
-PIDFILE = "/tmp/lisk-tester-metro.pid"  # owned-Metro pid
-CRASHLOG = "/tmp/lisk-tester-crash.log"  # `simctl log stream` capture
-CRASHLOG_PID = "/tmp/lisk-tester-crash.pid"  # the log-stream pid
+# Process-hygiene artifacts — namespace per project!
+METRO_LOG = "/tmp/lisk-tester-metro.log"
+PIDFILE = "/tmp/lisk-tester-metro.pid"
+CRASHLOG = "/tmp/lisk-tester-crash.log"
+CRASHLOG_PID = "/tmp/lisk-tester-crash.pid"
 
+WINDOW = f'window "{DEVICE_NAME}"'  # legacy osascript reference only
 
-# Single source of truth: scripts can read pinned values from here, e.g.
-# `python3 scripts/sim-qa/target.py --udid`.
+# ───────────────────── machinery — don't edit below this line ─────────────────────
+
+UDID = targetkit.resolve_udid(DEVICE_NAME, env_var=UDID_ENV, near=__file__)
+
 if __name__ == "__main__":
-    import sys
-
-    fields = {
-        "--udid": UDID,
-        "--port": str(PORT),
-        "--window": WINDOW,
-        "--bundle": BUNDLE,
-        "--mode": MODE,
-    }
-    key = sys.argv[1] if len(sys.argv) > 1 else "--udid"
-    if key not in fields:
-        sys.exit(f"target.py: unknown field {key!r}; pick from {list(fields)}")
-    print(fields[key])
+    targetkit.cli(globals())
