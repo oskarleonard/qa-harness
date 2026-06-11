@@ -46,6 +46,16 @@ Web:
 - Headless: `qa shot` is always headless. The agent's live eyes are the
   Playwright MCP — toggle headless in the project's `.mcp.json` args.
 
+### Web gotcha — Next 16 allows ONE dev server per project dir
+
+A second `next dev` (the tester's) boots, detects the developer's instance,
+and self-terminates ("Another next dev server is already running"). Fix: a
+distDir env hook in the app's `next.config` —
+`distDir: process.env.NEXT_DIST_DIR || ".next"` — plus
+`MODE_ENV = {"NEXT_DIST_DIR": ".next-qa"}` in target.py (gitignore
+`.next-qa/`). Without the hook, the tester only runs while the dev server is
+down.
+
 ## Empirical gotchas — mobile/iOS (don't relearn these)
 
 1. **idb rejects `"booted"` as a UDID** — pass the real UDID (`simctl`
