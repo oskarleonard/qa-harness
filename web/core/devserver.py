@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Web QA tester's dev-server manager — PINNED to target.TESTER_PORT. [DEV TOOL]
 
-Owns exactly one Next dev server (the tester's), spawned with the env for the
-active mode (local | msw | staging). Never kills a server on another port, so
-your own `bun dev:web` (:3000) coexists.
+Owns exactly one dev server (the tester's — Next, Vite, ...; see
+target.SERVER_CMD), spawned with the env for the active mode. Never kills a
+server on another port, so your own dev server coexists.
 
 Subcommands:
   serve         (re)start the tester's server (kills ONLY :TESTER_PORT first)
@@ -21,16 +21,14 @@ import time
 import urllib.request
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(0, os.environ.get("QA_PROJECT_QA_DIR") or os.path.dirname(HERE))
 import target  # noqa: E402
 
 
 def _find_repo():
-    d = HERE
+    d = os.environ.get("QA_PROJECT_QA_DIR") or HERE
     for _ in range(6):
-        if os.path.exists(os.path.join(d, "package.json")) and os.path.isdir(
-            os.path.join(d, "apps", "web")
-        ):
+        if os.path.exists(os.path.join(d, "package.json")):
             return d
         parent = os.path.dirname(d)
         if parent == d:
@@ -40,6 +38,12 @@ def _find_repo():
 
 
 REPO = _find_repo()
+
+# How to launch the project's dev server (override per project in target.py):
+#   SERVER_CMD — argv list, default ["bun", "run", "dev"]
+#   SERVER_CWD — subdir of the repo root to launch from, default the root
+_SERVER_CMD = getattr(target, "SERVER_CMD", ["bun", "run", "dev"])
+_SERVER_CWD = os.path.normpath(os.path.join(REPO, getattr(target, "SERVER_CWD", "")))
 
 
 def pids_on_port():
@@ -67,9 +71,15 @@ def server_ok():
         return False
 
 
+_BACKEND_URL = getattr(target, "BACKEND_URL", None)  # ground-truth API; None = project has no backend
+_BACKEND_HINT = getattr(target, "BACKEND_HINT", "start your local backend")
+
+
 def backend_ok():
+    if not _BACKEND_URL:
+        return True
     try:
-        urllib.request.urlopen(target.BACKEND_URL, timeout=3)
+        urllib.request.urlopen(_BACKEND_URL, timeout=3)
         return True
     except urllib.error.HTTPError:
         return True
@@ -82,8 +92,8 @@ def start_server():
     time.sleep(1)
     log = open(target.SERVER_LOG, "w")
     p = subprocess.Popen(
-        ["bun", "run", "dev"],
-        cwd=os.path.join(REPO, "apps", "web"),
+        _SERVER_CMD,
+        cwd=_SERVER_CWD,
         stdout=log, stderr=log,
         env={**os.environ, **target.MODE_ENV, "PORT": str(target.TESTER_PORT)},
         start_new_session=True,
@@ -104,13 +114,13 @@ def _wait_up(seconds=90):
 
 def cmd_serve(_):
     pid = start_server()
-    print(f"started Next dev pid={pid} url={target.APP_URL} mode={target.MODE} "
+    print(f"started dev server pid={pid} url={target.APP_URL} mode={target.MODE} "
           f"log={target.SERVER_LOG}")
     up = _wait_up()
     print(f"server: {'UP' if up else 'still starting/down — see log'}")
-    if target.MODE == "local" and not backend_ok():
-        print(f"WARNING: local backend {target.BACKEND_URL} is DOWN — local mode "
-              "needs it: `cd ../lisk-backend && make run`")
+    if target.MODE == "local" and _BACKEND_URL and not backend_ok():
+        print(f"WARNING: local backend {_BACKEND_URL} is DOWN — local mode "
+              f"needs it: `{_BACKEND_HINT}`")
     if not up:
         sys.exit(1)
 
@@ -120,10 +130,10 @@ def cmd_health(_):
     server = server_ok()
     print(f"server: {'UP (200)' if server else 'DOWN — run `qa serve`'}")
     backend = True
-    if target.MODE == "local":
+    if target.MODE == "local" and _BACKEND_URL:
         backend = backend_ok()
-        print(f"backend {target.BACKEND_URL}: "
-              f"{'UP' if backend else 'DOWN — `cd ../lisk-backend && make run`'}")
+        print(f"backend {_BACKEND_URL}: "
+              + ("UP" if backend else f"DOWN — `{_BACKEND_HINT}`"))
     if not (server and backend):
         sys.exit(1)
 

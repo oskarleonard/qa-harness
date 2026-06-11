@@ -27,15 +27,15 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(0, os.environ.get("QA_PROJECT_QA_DIR") or os.path.dirname(HERE))
 import target  # noqa: E402
 
-RUNS = os.path.join(os.path.dirname(HERE), "runs")
+RUNS = os.path.join(os.environ.get("QA_PROJECT_QA_DIR") or os.path.dirname(HERE), "runs")
 CURRENT = os.path.join(RUNS, ".current")
 
 
 def _playwright_bin():
-    d = HERE
+    d = os.environ.get("QA_PROJECT_QA_DIR") or HERE
     for _ in range(6):
         for candidate in (
             os.path.join(d, "node_modules", ".bin", "playwright"),

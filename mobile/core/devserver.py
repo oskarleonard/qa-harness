@@ -34,19 +34,20 @@ import urllib.request
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)  # for sibling core modules (common, crashlog)
 # target.py lives one level up (project/core boundary).
-sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(0, os.environ.get("QA_PROJECT_QA_DIR") or os.path.dirname(HERE))
 import common  # noqa: E402
 import crashlog  # noqa: E402
 import idb_ui  # noqa: E402
 import target  # noqa: E402
 
-LOCAL_BACKEND_URL = "http://localhost:8080"  # mock mode's API target
+LOCAL_BACKEND_URL = getattr(target, "BACKEND_URL", "http://localhost:8080")  # ground-truth API; None = project has no backend
+_BACKEND_HINT = getattr(target, "BACKEND_HINT", "start your local backend")  # printed when the backend is DOWN
 
 
 def _find_repo():
     """Walk up to the project root (a dir containing package.json) so this folder
     works wherever it's dropped in a repo; falls back to two levels up."""
-    d = HERE
+    d = os.environ.get("QA_PROJECT_QA_DIR") or HERE
     for _ in range(6):
         if os.path.exists(os.path.join(d, "package.json")):
             return d
@@ -101,7 +102,9 @@ def metro_ok():
 
 def backend_ok():
     """ANY HTTP response (even 404) proves the local BE answers; connection
-    refused means it's down. Only meaningful in mock mode."""
+    refused means it's down. Only meaningful in mock mode with a backend."""
+    if not LOCAL_BACKEND_URL:
+        return True
     try:
         urllib.request.urlopen(LOCAL_BACKEND_URL, timeout=3)
         return True
@@ -172,9 +175,9 @@ def cmd_serve(_):
     up = _wait_up()
     print(f"metro: {'UP' if up else 'still starting/down — see log'}")
     print(f"crash-log stream pid={crashlog.start()} -> {target.CRASHLOG}")
-    if target.MODE == "mock" and not backend_ok():
+    if target.MODE == "mock" and LOCAL_BACKEND_URL and not backend_ok():
         print(f"WARNING: local backend {LOCAL_BACKEND_URL} is DOWN — mock mode needs it: "
-              "`cd ../lisk-backend && make run`")
+              f"`{_BACKEND_HINT}`")
     if up:
         # A foregrounded app may still be running a bundle from ANOTHER Metro
         # (the dev's :8081, or a different tester mode). serve just created a
@@ -268,10 +271,10 @@ def cmd_health(_):
     metro = metro_ok()
     print(f"metro localhost:{target.PORT}: {'UP (200)' if metro else 'DOWN'}")
     backend = True
-    if target.MODE == "mock":
+    if target.MODE == "mock" and LOCAL_BACKEND_URL:
         backend = backend_ok()
         print(f"backend {LOCAL_BACKEND_URL}: "
-              f"{'UP' if backend else 'DOWN — `cd ../lisk-backend && make run`'}")
+              + ("UP" if backend else f"DOWN — `{_BACKEND_HINT}`"))
     state = app_state()
     print(f"app state: {state}")
     # idb companion liveness — when DOWN, tap/tree silently no-op (run `recover`).
@@ -318,9 +321,9 @@ def cmd_doctor(_):
             capture_output=True, text=True, timeout=15)
         check(f"app installed ({target.BUNDLE})", app.returncode == 0,
               f"./node_modules/.bin/expo run:ios --no-bundler --device {target.UDID}")
-    if target.MODE == "mock":
+    if target.MODE == "mock" and LOCAL_BACKEND_URL:
         check(f"local backend ({LOCAL_BACKEND_URL})", backend_ok(),
-              "cd ../lisk-backend && make run  (Docker deps up first)", warn=True)
+              _BACKEND_HINT, warn=True)
 
     width = max(len(n) for _, n, _ in results)
     failed = False

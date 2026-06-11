@@ -15,7 +15,7 @@ if absent), appends the image at <feature>/<file> via an ISOLATED temp index
 the <img> tag to paste into the PR body.
 
 Portable: `<owner>/<repo>` is derived from the `origin` remote, so the same
-command works in lisk-mobile, lisk-web, etc.
+command works in any repo with an `origin` remote.
 
 Usage:
   qa publish <image> --feature <slug> [--name <file>] [--caption <text>] [--width N]

@@ -1,34 +1,27 @@
 #!/bin/bash
-# sim-qa front door — self-contained (no package.json changes needed).
-# Usage: scripts/sim-qa/qa <command> [args]
+# sim-qa engine front door (harness-resident — see repo README).
+# Always invoked through a PROJECT's scripts/sim-qa/qa shim, which exports
+# QA_PROJECT_QA_DIR = the project's qa dir. That dir layers everything
+# project-specific over this engine:
+#   target.py      pinned sim/port/bundle/mode        (committed, required)
+#   target.local   per-machine sim UDID pin           (gitignored, auto-written)
+#   product/       ground truth + design map + rails  (optional)
+#   ext/           project-specific subcommands       (optional)
+#   runs/          per-run output                     (gitignored)
 set -euo pipefail
-DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+H="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+COMMON="$(cd "$H/.." && pwd)/common"
 
 cmd="${1:-help}"
 if [ "$#" -gt 0 ]; then shift; fi
 
-case "$cmd" in
-  serve|recover|reload|health|doctor|status|stop)
-    exec python3 "$DIR/core/devserver.py" "$cmd" "$@" ;;
-  logs)
-    exec python3 "$DIR/core/devserver.py" metrolog "${1:-40}" ;;
-  crashes)
-    exec python3 "$DIR/core/devserver.py" crashes "${1:-20}" ;;
-  init|shot|tree|tap|type|scroll|note|act)
-    exec python3 "$DIR/core/qa.py" "$cmd" "$@" ;;
-  publish)
-    exec python3 "$DIR/core/publish.py" "$@" ;;
-  check|snapshot|diff)
-    exec python3 "$DIR/lisk/qa_api.py" "$cmd" "$@" ;;
-  find)
-    exec python3 "$DIR/core/idb_ui.py" find "$@" ;;
-  companion)
-    exec python3 "$DIR/core/idb_ui.py" companion "$@" ;;
-  target)
-    exec python3 "$DIR/target.py" "$@" ;;
-  help|--help|-h)
-    cat <<'EOF'
-sim-qa — AI eyes & hands on the lisk iOS simulator (pinned sim/port: target.py)
+if [ "$cmd" = "help" ] || [ "$cmd" = "--help" ] || [ "$cmd" = "-h" ]; then
+  cat <<'EOF'
+sim-qa — AI eyes & hands on an iOS simulator (pin: the project's target.py)
+
+Engine lives in qa-harness/mobile; run it via your project's scripts/sim-qa/qa
+shim. Project-specific layers next to the shim: target.py (pin) · product/
+(ground truth, Figma map, rails) · ext/ (extra commands) · runs/ (output).
 
 Metro / app lifecycle:
   qa doctor             first-time machine check — every FAIL prints its fix
@@ -45,9 +38,9 @@ Run bookkeeping + eyes & hands:
   qa init --scope S [--driver wake|goal] [--label L]   start a run (journal/findings)
   qa shot <label>       screenshot into the current run
   qa tree               dump labelled a11y elements (what's tappable)
-  qa tap --label "AX" [--role Button] [--force] | --tab home|notifications | --frac fx,fy
-                        (--role disambiguates label collisions; refuses off-viewport / tab-bar targets)
-  qa type <text> [--label L] [--role R] [--clear] [--enter]   type into a (focused) field
+  qa tap --label "AX" [--role Button] [--force] | --tab <name> | --frac fx,fy
+                        (--role disambiguates collisions; refuses off-viewport targets)
+  qa type <text> [--label L] [--role R] [--clear] [--enter]   type into a field
   qa scroll [down|up] [--amount 0.35]   scroll native lists (NOT RNGH gestures)
   qa note <text>        append a finding to the current run
   qa act <text>         append a line to actions.log
@@ -57,18 +50,58 @@ Run bookkeeping + eyes & hands:
 
 PR evidence (hosts images OFF the PR branch — see RUNBOOK "PR evidence"):
   qa publish <img> --feature S [--name F] [--caption C] [--width N]
-                        host a QA image on the qa-assets orphan branch; print the PR <img> tag
+                        host a QA image on the repo's qa-assets orphan branch
 
-API invariants (local BE on :8080 — registry: lisk/INVARIANTS.md):
-  qa check              assert INV-1..7 against BE ground truth (exit 1 on fail)
-  qa snapshot --out f   snapshot transaction states before an action
-  qa diff f [--expect-new N]   delta probes D-1..D-3 vs a snapshot
+Ground truth (delegated to the project's product/qa_api.py when present):
+  qa check              assert the project's invariant registry (exit 1 on fail)
+  qa snapshot --out f   snapshot state before a risky action
+  qa diff f [--expect-new N]   delta probes vs a snapshot
 
-Modes (target.py): LISK_QA_MODE=mock (default; local BE on :8080 required)
-                   LISK_QA_MODE=staging (structured; see RUNBOOK.md)
+Anything else resolves against the project's ext/ dir (e.g. an autoplay layer).
+Modes: set per project in target.py (e.g. LISK_QA_MODE=mock|staging for lisk).
 EOF
-    ;;
+  exit 0
+fi
+
+PROJ="${QA_PROJECT_QA_DIR:-}"
+if [ -z "$PROJ" ] || [ ! -f "$PROJ/target.py" ]; then
+  echo "qa: QA_PROJECT_QA_DIR not set or no target.py in it — run via your project's scripts/sim-qa/qa shim" >&2
+  exit 1
+fi
+export QA_PROJECT_QA_DIR="$PROJ"
+
+case "$cmd" in
+  serve|recover|reload|health|doctor|status|stop)
+    exec python3 "$H/core/devserver.py" "$cmd" "$@" ;;
+  logs)
+    exec python3 "$H/core/devserver.py" metrolog "${1:-40}" ;;
+  crashes)
+    exec python3 "$H/core/devserver.py" crashes "${1:-20}" ;;
+  init|shot|tree|tap|type|scroll|note|act)
+    exec python3 "$H/core/qa.py" "$cmd" "$@" ;;
+  publish)
+    exec python3 "$COMMON/publish.py" "$@" ;;
+  check|snapshot|diff)
+    if [ -f "$PROJ/product/qa_api.py" ]; then
+      exec python3 "$PROJ/product/qa_api.py" "$cmd" "$@"
+    fi
+    echo "qa $cmd: no ground-truth layer in this project (no product/qa_api.py) — nothing to assert"
+    exit 0 ;;
+  find)
+    exec python3 "$H/core/idb_ui.py" find "$@" ;;
+  companion)
+    exec python3 "$H/core/idb_ui.py" companion "$@" ;;
+  target)
+    exec python3 "$PROJ/target.py" "$@" ;;
   *)
-    echo "qa: unknown command '$cmd' — run 'scripts/sim-qa/qa help'" >&2
+    for cand in "$PROJ/ext/$cmd" "$PROJ/ext/$cmd.py" "$PROJ/ext/$cmd.sh"; do
+      [ -f "$cand" ] || continue
+      case "$cand" in
+        *.py) exec python3 "$cand" "$@" ;;
+        *.sh) exec bash "$cand" "$@" ;;
+        *)    exec "$cand" "$@" ;;
+      esac
+    done
+    echo "qa: unknown command '$cmd' — run 'qa help' (project commands live in ext/)" >&2
     exit 1 ;;
 esac

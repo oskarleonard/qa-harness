@@ -1,3 +1,13 @@
+# target.example.py — copy into YOUR project as scripts/qa/target.py and adapt.
+# This is a real working pin (lisk-web's), kept as the living example.
+# Per-app values: TESTER_PORT (never your dev port), MODE/MODE_ENV (your app's
+# mock/msw envs), SERVER_LOG/PIDFILE (namespace per project!).
+# Dev-server launch (engine defaults: `bun run dev` at the repo root):
+#   SERVER_CMD = ["npm", "run", "dev"]      # any argv; PORT env is set for you
+#   SERVER_CWD = "apps/web"                 # monorepo subdir, default repo root
+# Optional ground truth: BACKEND_URL (omit/None = no backend) + BACKEND_HINT.
+# Headless note: `qa shot` is always headless; the agent's live eyes are the
+# Playwright MCP — toggle ITS headless mode in the project's .mcp.json args.
 """Target config for the web QA tester — lisk-web's pin.
 
 The tester owns its OWN Next dev server on a pinned port, so your dev server

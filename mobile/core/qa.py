@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-sim-qa — autonomous QA-loop tooling for the lisk iOS simulator.  [DEV TOOL]
+sim-qa — autonomous QA-loop tooling for an iOS simulator app.  [DEV TOOL]
 
 The *mechanical + bookkeeping* layer for a model-driven QA loop. Creates a
 versioned run folder, drives the sim (screenshot/tap), and logs every action so
@@ -37,14 +37,14 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)  # for sibling core modules (common, idb_ui)
 # target.py lives one level up (project/core boundary).
-sys.path.insert(0, os.path.dirname(HERE))
+sys.path.insert(0, os.environ.get("QA_PROJECT_QA_DIR") or os.path.dirname(HERE))
 import common  # noqa: E402
 import idb_ui  # noqa: E402
 import target  # noqa: E402
 
 # Run output lives at scripts/sim-qa/runs/ (NOT core/runs/ — an earlier version
 # anchored to core/ by accident and grew two runs dirs).
-RUNS = os.path.join(os.path.dirname(HERE), "runs")
+RUNS = os.path.join(os.environ.get("QA_PROJECT_QA_DIR") or os.path.dirname(HERE), "runs")
 CURRENT = os.path.join(RUNS, ".current")
 
 

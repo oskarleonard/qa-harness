@@ -1,3 +1,13 @@
+# target.example.py — copy into YOUR project as scripts/sim-qa/target.py and
+# adapt. This is a real working pin (lisk-mobile's), kept as the living example.
+# Per-app values to derive (see PORTING.md): DEVICE_NAME (a sim model no other
+# project's tester uses), PORT (distinct from dev Metro + every other tester),
+# BUNDLE + SCHEME (app.config.ts), MODE/METRO_ENV (your mock-auth flag),
+# TAB_ORDER (read `qa tree`, don't guess), LAUNCHER_LABELS, LOG_PROCESS_HINT,
+# and /tmp artifact paths (namespace per project!).
+# Optional ground truth: BACKEND_URL (health/doctor ping it; omit or None when
+# the project has no backend) and BACKEND_HINT (the fix command printed when
+# it's DOWN, e.g. "cd ../my-backend && make run").
 """Target config for the auto-QA tester — lisk-app-mobile's pin.
 
 The tester is PINNED to exactly one simulator + Metro port, so any other
