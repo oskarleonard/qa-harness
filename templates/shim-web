@@ -13,7 +13,7 @@ if [ -z "$H" ]; then H="$HOME/programming/projects/qa-harness"; fi
 
 if [ ! -x "$H/web/qa" ]; then
   echo "qa: harness not found at '$H'. Fix one of:" >&2
-  echo "  git clone https://github.com/oskarfransson/qa-harness \"\$HOME/programming/projects/qa-harness\"" >&2
+  echo "  git clone https://github.com/oskarleonard/qa-harness \"\$HOME/programming/projects/qa-harness\"" >&2
   echo "  echo /path/to/qa-harness > ~/.qa-harness" >&2
   echo "  export QA_HARNESS_DIR=/path/to/qa-harness" >&2
   exit 1

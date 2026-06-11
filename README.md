@@ -49,7 +49,7 @@ care where the dir comes from.
 ## Install (once per machine)
 
 ```bash
-git clone <this-repo> ~/programming/projects/qa-harness
+git clone https://github.com/oskarleonard/qa-harness ~/programming/projects/qa-harness
 ```
 
 Projects resolve the harness in this order:
