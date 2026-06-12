@@ -43,6 +43,11 @@ steps), **Driver: wake / Driver: goal** (pacing specifics), **Watchdog**.
   journal (`runs/<id>/journal.md`), re-read every iteration.
 - Bounded always: every mission derives a deadline and/or an item cap from
   its inputs, with a default. Never unbounded.
+- **Code-producing missions MUST include the pre-PR quality gate** in their
+  finish steps: run `/simplify` then `/code-review` over the branch diff,
+  apply high-confidence findings, re-verify + static checks, THEN open the
+  PR (one gate pass, no looping). bug-hunt §4 is the reference wording —
+  copy it into any new mission that commits code.
 
 ## Current missions
 
