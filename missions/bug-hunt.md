@@ -170,6 +170,15 @@ on a timer EVEN IF an iteration crashed — that is the point. In this mode:
 - **Ground-truth sweep first:** `qa check` — each failure is a finding;
   include the full output in findings.
 - Append the final `## Summary` section to `runs/<id>/findings.md`.
+- **Pre-PR quality gate (fix mode, when commits exist) — BEFORE pushing:**
+  run the built-in review skills over the branch diff: `/simplify` first
+  (reuse/extraction findings a human reviewer would request — inline helpers
+  that belong in shared utils, derivation logic that belongs in its own
+  module) and then `/code-review` (correctness). Apply the high-confidence
+  findings as additional commits; after ANY gate change, re-verify the
+  affected fixes' repros and re-run the product static checks. One gate pass
+  only — don't loop. If the skills aren't available in the session, note
+  that in findings and proceed.
 - IF commits exist on `qa-auto/<scope>-<STAMP>`: push + open a PR into the
   base per the **product PR convention** (`product/RUNBOOK.md` — e.g. some
   repos want title-only bodies + self-assign). ELSE leave the branch local
