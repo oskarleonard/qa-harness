@@ -1,21 +1,29 @@
 #!/usr/bin/env python3
-"""Publish a QA image to the `qa-assets` orphan branch; print a PR-ready <img>.
+"""Publish a QA image to the hidden qa-assets store; print a PR-ready <img>.
 
 WHY: QA before/after montages must NOT be committed to the feature/PR branch —
-on squash-merge that lands them in `main`. Instead they live on a dedicated
-ORPHAN branch `qa-assets` (no code history, never merged, append-only) and are
-referenced from the PR body by a stable raw URL:
+on squash-merge that lands them in `main`. They also shouldn't live on a
+regular branch: GitHub shows a "had recent pushes — Compare & pull request"
+banner for any freshly-pushed branch, every single run. So images live on a
+**custom ref** outside the branch namespace:
 
-    https://github.com/<owner>/<repo>/blob/qa-assets/<feature>/<file>?raw=true
+    refs/qa-assets/store
 
-The branch name has no slash, so the plain branch-name URL is stable and needs
-no commit-SHA pinning. This command fetches qa-assets (creating it as an orphan
-if absent), appends the image at <feature>/<file> via an ISOLATED temp index
-(never touches your working tree, current branch, or HEAD), pushes, and prints
-the <img> tag to paste into the PR body.
+No branch → no banner, no branch-list entry, nothing to merge or PR. The ref's
+history is append-only and shares no ancestry with `main`. PR bodies reference
+images by COMMIT-PINNED raw URL, which never rots:
 
-Portable: `<owner>/<repo>` is derived from the `origin` remote, so the same
-command works in any repo with an `origin` remote.
+    https://github.com/<owner>/<repo>/blob/<commit-sha>/<path>?raw=true
+
+Migration: repos that previously used the `qa-assets` BRANCH get seamless
+continuity — the first publish seeds the store ref from the legacy branch tip,
+so the old branch can stay frozen (its embedded URLs keep working) while all
+new publishes go to the hidden ref.
+
+Everything happens via an ISOLATED temp index (never touches your working
+tree, current branch, or HEAD). Idempotent: re-publishing identical content
+reuses the existing commit. `<owner>/<repo>` derives from `origin`, so the
+same command works in any repo.
 
 Usage:
   qa publish <image> --feature <slug> [--name <file>] [--caption <text>] [--width N]
@@ -27,21 +35,22 @@ import subprocess
 import sys
 import tempfile
 
-BRANCH = "qa-assets"
+REF = "refs/qa-assets/store"
+LEGACY_BRANCH = "qa-assets"  # frozen after migration; never pushed again
 
 _README = """\
-# qa-assets — image host for QA artifacts
+# qa-assets — image store for QA artifacts
 
-Orphan branch that ONLY hosts images referenced from PR descriptions
-(automated iOS-sim QA before/after montages, etc.).
+Machine-managed, append-only store of images referenced from PR descriptions
+(automated QA before/after montages, etc.).
 
-- No shared history with `main`; carries no code.
-- Never merged, no PR — `main` never sees it.
-- Append-only, so `?raw=true` links never rot.
-- One folder per feature / PR. Referenced via
-  https://github.com/<owner>/<repo>/blob/qa-assets/<path>?raw=true
+- Lives on the hidden ref `refs/qa-assets/store` — NOT a branch: no UI
+  banners, no branch-list entry, nothing to merge or PR.
+- Shares no history with `main`; never reachable from any branch.
+- PR bodies link images by commit-pinned raw URL, so links never rot.
 
-Managed by the QA tester's `qa publish` command. Do not delete (PR bodies link here).
+Managed by the QA tester's `qa publish` command. Do not delete the ref
+(PR bodies link into its history).
 """
 
 
@@ -61,11 +70,17 @@ def owner_repo():
     return m.group(1)
 
 
-def remote_commit():
-    """Commit SHA of origin/qa-assets after a fetch, or None if the branch is absent."""
-    git("fetch", "origin", BRANCH, check=False)  # fine if it doesn't exist yet
+def remote_base():
+    """Tip of the remote store ref after a fetch; on first use, seed from the
+    legacy qa-assets BRANCH tip (continuous history → old branch-URL images
+    stay reachable). None when neither exists (fresh bootstrap)."""
+    git("fetch", "origin", f"+{REF}:{REF}", check=False)  # fine if absent
+    tip = git("rev-parse", "--verify", "--quiet", REF, check=False)
+    if tip:
+        return tip
+    git("fetch", "origin", LEGACY_BRANCH, check=False)
     return git("rev-parse", "--verify", "--quiet",
-               f"refs/remotes/origin/{BRANCH}", check=False) or None
+               f"refs/remotes/origin/{LEGACY_BRANCH}", check=False) or None
 
 
 def hash_blob(path):
@@ -98,12 +113,12 @@ def emit_snippet(url, caption, width):
 def main():
     ap = argparse.ArgumentParser(
         prog="qa publish",
-        description="Host a QA image on the qa-assets orphan branch (keeps it out of main).",
+        description="Host a QA image on the hidden qa-assets store ref (keeps it out of main, branches, and banners).",
     )
     ap.add_argument("image", help="path to the image (montage/screenshot) to host")
     ap.add_argument("--feature", required=True,
-                    help="folder slug on qa-assets, e.g. transfer-account-name-capitalize")
-    ap.add_argument("--name", help="filename on qa-assets (default: image basename)")
+                    help="folder slug in the store, e.g. transfer-account-name-capitalize")
+    ap.add_argument("--name", help="filename in the store (default: image basename)")
     ap.add_argument("--caption", default="", help="caption / alt text for the <img>")
     ap.add_argument("--width", type=int, default=580,
                     help="display width in the PR body (default 580 — the standard)")
@@ -114,8 +129,7 @@ def main():
     os.chdir(git("rev-parse", "--show-toplevel"))
 
     dest = f"{a.feature.strip('/')}/{a.name or os.path.basename(a.image)}"
-    url = f"https://github.com/{owner_repo()}/blob/{BRANCH}/{dest}?raw=true"
-    base = remote_commit()
+    base = remote_base()
 
     idx = tempfile.mktemp(suffix=".idx")  # isolated index → never touches the real one
     env = {**os.environ, "GIT_INDEX_FILE": idx}
@@ -124,22 +138,21 @@ def main():
         os.unlink(idx)
 
     if base and tree == git("rev-parse", f"{base}^{{tree}}"):
-        print(f"already published (identical content) — {url}")
-        emit_snippet(url, a.caption, a.width)
-        return
+        commit = base
+        print(f"already published (identical content) — commit {commit[:9]}")
+    else:
+        msg = f"qa-assets: {dest}"
+        commit = git("commit-tree", tree, "-p", base, "-m", msg) if base \
+            else git("commit-tree", tree, "-m", msg)
+        push = subprocess.run(["git", "push", "origin", f"{commit}:{REF}"],
+                              text=True, capture_output=True)
+        if push.returncode != 0:
+            sys.exit("push to the qa-assets store failed (someone else may have "
+                     f"published — re-run to retry):\n{push.stderr.strip()}")
+        git("update-ref", REF, commit)  # keep the local store ref in sync
+        print(f"published -> commit {commit[:9]} on {REF}")
 
-    msg = f"qa-assets: {dest}"
-    commit = git("commit-tree", tree, "-p", base, "-m", msg) if base \
-        else git("commit-tree", tree, "-m", msg)
-
-    push = subprocess.run(["git", "push", "origin", f"{commit}:refs/heads/{BRANCH}"],
-                          text=True, capture_output=True)
-    if push.returncode != 0:
-        sys.exit("push to qa-assets failed (someone else may have published — "
-                 f"re-run to retry):\n{push.stderr.strip()}")
-    git("update-ref", f"refs/heads/{BRANCH}", commit)  # keep local branch in sync
-
-    print(f"published -> {url}")
+    url = f"https://github.com/{owner_repo()}/blob/{commit}/{dest}?raw=true"
     emit_snippet(url, a.caption, a.width)
 
 

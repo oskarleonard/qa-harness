@@ -95,12 +95,14 @@ A find-and-fix run that changed anything ON-SCREEN should SHOW it in the PR body
   and leaves nothing to montage at Finish. `after` = the verified fix after the
   hot reload. Build it with ImageMagick (`magick montage …`) at full res;
   **never downscale the source** (bakes in blur).
-- **Host it OFF the PR branch:** `qa publish <montage.png> --feature <flow>-<topic>
-  [--caption "…"]`. It appends the PNG to the append-only, never-merged
-  `qa-assets` orphan branch (creating it on first use) and prints the
-  `<img src="…/blob/qa-assets/<feature>/<file>?raw=true" width="580">` tag for
-  the PR body — keeping montages out of `main` AND the PR's Files-changed.
-  **Never `git add` a PNG on the run branch** (on squash-merge it lands in `main`).
+- **Host it via `qa publish` — NEVER on the PR/run branch:** `qa publish
+  <montage.png> --feature <flow>-<topic> [--caption "…"]`. It appends the PNG
+  to the hidden, append-only `refs/qa-assets/store` ref (no branch → no
+  "recent pushes" banner, nothing to merge; created/seeded on first use) and
+  prints a commit-pinned `<img src="…/blob/<sha>/<feature>/<file>?raw=true"
+  width="580">` tag for the PR body. Images share no history with `main` and
+  never appear in any branch or Files-changed. **Never `git add` a PNG on the
+  run branch** (on squash-merge it lands in `main`).
 - **One-line "what changed" caption above each image** so the diff reads at a glance.
 
 **The montage gate is MECHANICAL, not a judgment call** — never infer

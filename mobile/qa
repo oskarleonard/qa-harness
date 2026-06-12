@@ -50,7 +50,7 @@ Run bookkeeping + eyes & hands:
 
 PR evidence (hosts images OFF the PR branch — see RUNBOOK "PR evidence"):
   qa publish <img> --feature S [--name F] [--caption C] [--width N]
-                        host a QA image on the repo's qa-assets orphan branch
+                        host a QA image on the hidden qa-assets store ref (no branch, no banner)
 
 Ground truth (delegated to the project's product/qa_api.py when present):
   qa check              assert the project's invariant registry (exit 1 on fail)

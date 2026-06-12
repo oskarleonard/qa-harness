@@ -88,12 +88,14 @@ body, not just describe it:
   the DISPLAY in the PR body: `<img src="…?raw=true" width="580" />` —
   **580px is the standard.**
 - **One-line "what changed" caption above each image** so the diff reads at a glance.
-- **Host images on the repo's `qa-assets` orphan branch — NOT the PR/run branch.**
-  Run `qa publish <montage.png> --feature <flow>-<topic> [--caption "…"]`: it
-  appends the PNG to the append-only, never-merged `qa-assets` branch (creating
-  it on first use) and prints the `<img …>` tag to paste into the PR body. This
-  keeps montages out of `main` AND out of the PR's Files-changed. **Never
-  `git add` a PNG on the run branch** — on squash-merge that lands it in `main`.
+- **Host images via `qa publish` — NEVER on the PR/run branch.** Run
+  `qa publish <montage.png> --feature <flow>-<topic> [--caption "…"]`: it
+  appends the PNG to the hidden, append-only `refs/qa-assets/store` ref (no
+  branch → no "recent pushes" banner, nothing to merge; created/seeded on
+  first use) and prints a commit-pinned `<img …>` tag to paste into the PR
+  body. Images share no history with `main` and never appear in any branch
+  or Files-changed. **Never `git add` a PNG on the run branch** — on
+  squash-merge that lands it in `main`.
 
 **The montage gate is MECHANICAL, not a judgment call** — never infer
 visual-vs-logic from a fix's title or category. At Finish, for EVERY committed
