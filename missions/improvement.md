@@ -41,8 +41,8 @@ On top of them:
   - **DO** it only if it is clear, localized, low-risk, and behavior-preserving
     (rename, extract a helper, move a token, add an a11y attribute, a contained
     perf fix, a safe patch-level bump).
-  - **SKIP → bug-hunt** if the item is actually a behavioral defect (a fix that
-    changes observed output is a bug, not an improvement).
+  - **SKIPPED → bug-hunt** if the item is actually a behavioral defect (a fix
+    that changes observed output is a bug, not an improvement).
   - **DEFER → owner** if it is architectural, cross-cutting, parity-/product-
     intent-sensitive (would alter a surface someone verified on purpose), needs
     a new dependency or a native rebuild, or has more than one defensible
@@ -88,7 +88,9 @@ On top of them:
    `qa recover`); require a clean `git status` (dirty → STOP); `STAMP` once;
    create `improve/<label>-<STAMP>` off `base`; `qa init`; seed
    `runs/<id>/journal.md` with the queue + dispositions + rails (write-fence,
-   `behavior` mode) + base branch. Seed `improvements.md` with the verdict table.
+   `behavior` mode) + base branch. Seed `improvements.md` with the verdict
+   table — it is mission-owned, write verdicts to it directly (`qa note` /
+   `findings.md` is only for incidental defects you trip over).
 4. **Per DO item** (one or two per iteration, journal-tracked, re-read the
    journal first):
    a. Make the smallest localized change.
@@ -100,7 +102,9 @@ On top of them:
 5. **Finish:** `qa check` ground-truth sweep (failures → log notes, block the
    PR until resolved); append the verdict table + `## Summary` (totals per
    verdict + the **DEFERRED owner-decisions list**, so the human gets a
-   decision-ready summary, not a pile). **Pre-PR quality gate** (when commits
+   decision-ready summary, not a pile; any selected item not reached within the
+   bound is listed as `not-run (bound)`, so every selected item has a
+   disposition). **Pre-PR quality gate** (when commits
    exist, before pushing): `/simplify` then `/code-review` over the diff, apply
    high-confidence findings, re-verify the touched items + re-run static checks;
    one pass, no loop (skills absent → note it, proceed). IF DONE commits exist:

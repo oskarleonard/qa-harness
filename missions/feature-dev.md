@@ -102,14 +102,17 @@ Layered on top (this mission commits code, so they are strict):
 - `qa init --scope <slug> --driver <wake|goal> --label <STAMP>` → seed
   `runs/<id>/journal.md`: the criteria checklist, tester mode, deadline, base
   branch, the **write-fence**, HARD RULES (incl. user constraints), and the
-  build plan. Seed `build-log.md` with the empty criteria table.
+  build plan. Seed `build-log.md` with the empty criteria table —
+  `build-log.md` is mission-owned, write verdicts to it directly; `qa note` /
+  `findings.md` is for incidental defects you trip over, not the criteria.
 - One line before building: **mode · feature slug · #criteria · deadline ·
   target · tester mode** + the caveat that the loop runs only while this
   session stays open and the Mac stays awake.
 
 ## 4 · Build + verify loop (engine RUNBOOK §6 pacing; journal-tracked)
 Re-read `runs/<id>/journal.md` FIRST every iteration (compaction-proof). Then:
-STEP0 stop-check (`date` vs deadline; all criteria terminal → §5) →
+STEP0 stop-check — exit to §5 on ANY of: deadline reached · all criteria
+terminal (PASS/BLOCKED) →
 STEP1 `qa health` (down → `qa recover`) →
 STEP2 pick the next un-met criterion; implement the **smallest** change that
 satisfies it (the spec is the ceiling, not a floor to gold-plate) →
